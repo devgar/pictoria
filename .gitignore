@@ -5,6 +5,10 @@
 *.so
 *.dylib
 
+main
+pictoria
+pic-server
+
 # Test binary, built with `go test -c`
 *.test
 
@@ -13,3 +17,11 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+
