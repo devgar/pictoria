@@ -1,4 +1,4 @@
-module github.com/devgar/pic.edgarai.com
+module github.com/devgar/pictoria
 
 go 1.16
 

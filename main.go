@@ -43,9 +43,11 @@ func serveFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, route)
 }
 
-func main() {
-
+func init() {
 	initStorage()
+}
+
+func main() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		log.Println(r.Method, r.URL.Path)
