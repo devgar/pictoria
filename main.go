@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/chai2010/webp"
+	_ "github.com/joho/godotenv/autoload"
 )
 
 var storage string
