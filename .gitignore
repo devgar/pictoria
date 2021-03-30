@@ -18,7 +18,10 @@ pic-server
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# DotEnv file
+.env
 
+# Picture files
 *.jpg
 *.jpeg
 *.png
