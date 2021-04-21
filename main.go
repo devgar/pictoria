@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"path"
 	"runtime"
 	"time"
@@ -29,6 +30,10 @@ func writeError(w http.ResponseWriter, err error, code ...int) {
 	}
 	w.WriteHeader(c)
 	fmt.Fprintf(w, err.Error())
+}
+
+func handlePost() {
+
 }
 
 func main() {
@@ -80,19 +85,27 @@ func main() {
 			}
 
 			log.Printf("Encoded WEBP")
+			filename := fmt.Sprintf("%s.webp", r.URL.Path)
 
-			var dest = path.Join(storage, "out.webp")
+			var dest = path.Join(storage, filename)
+			if err := os.MkdirAll(path.Dir(dest), os.FileMode(int(0776))); err != nil {
+				writeError(w, err)
+				return
+			}
+			log.Printf("Created %s", path.Dir(dest))
 			if err := ioutil.WriteFile(dest, buf.Bytes(), 0666); err != nil {
 				writeError(w, err)
+				return
 			}
 			log.Printf("Writed WEBP at %s", dest)
 
 			time.Sleep(1400 * time.Millisecond)
 
-			var location = fmt.Sprintf("http://%s/%s", r.Host, dest)
+			var location = fmt.Sprintf("http://%s%s", r.Host, filename)
+			log.Printf("Accessible by %s", location)
 			w.Header().Add("location", location)
 			w.WriteHeader(201)
-			fmt.Fprintf(w, "Successfully Uploaded File\n\n%s\n", img64)
+			fmt.Fprintf(w, "%s", img64)
 			return
 		}
 	})
