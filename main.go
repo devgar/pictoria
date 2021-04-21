@@ -16,23 +16,12 @@ import (
 	"github.com/denisbrodbeck/sqip"
 )
 
+var MAX_UPLOAD_SIZE int64 = 10 << 20 // Set max size to 10MB
+
 func serveFile(w http.ResponseWriter, r *http.Request) {
 	var route = path.Join(storage, r.URL.Path[1:])
 	log.Println("Using route", route)
 	http.ServeFile(w, r, route)
-}
-
-func writeError(w http.ResponseWriter, err error, code ...int) {
-	var c = 500
-	if len(code) > 0 {
-		c = code[0]
-	}
-	w.WriteHeader(c)
-	fmt.Fprintf(w, err.Error())
-}
-
-func handlePost() {
-
 }
 
 func main() {
@@ -44,56 +33,56 @@ func main() {
 			return
 		}
 		if r.Method == "POST" {
+
+			if err := r.ParseMultipartForm(MAX_UPLOAD_SIZE); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
 			f := r.URL.Query().Get("f")
 			if f == "" {
 				f = "file"
 			}
-			r.ParseMultipartForm(10 << 20) // Set max size to 10MB
 			file, _, err := r.FormFile(f)
 			if err != nil {
-				writeError(w, err)
+				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 			defer file.Close()
 
-			img, text, err := image.Decode(file)
+			img, ext, err := image.Decode(file)
 			if err != nil {
-				writeError(w, err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			log.Printf("Got string format %s", text)
+			log.Printf("Got string format %s", ext)
 
-			svg, width, height, err := sqip.RunLoaded(img, 256, 16, 1, 128, 0, runtime.NumCPU(), "")
+			svg, _, _, err := sqip.RunLoaded(img, 256, 16, 1, 128, 0, runtime.NumCPU(), "")
 			if err != nil {
-				writeError(w, err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-
-			log.Printf("Got SVG of size %dx%d", width, height)
 
 			var img64 = "data:image/svg+xml;base64," + sqip.Base64(svg)
-
-			log.Printf("Got SVG Image in BASE64")
 
 			var buf bytes.Buffer
 			var ops = &webp.Options{Lossless: false, Quality: 80}
 
 			if err := webp.Encode(&buf, img, ops); err != nil {
-				writeError(w, err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 
-			log.Printf("Encoded WEBP")
 			filename := fmt.Sprintf("%s.webp", r.URL.Path)
 
 			var dest = path.Join(storage, filename)
 			if err := os.MkdirAll(path.Dir(dest), os.FileMode(int(0776))); err != nil {
-				writeError(w, err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			log.Printf("Created %s", path.Dir(dest))
 			if err := ioutil.WriteFile(dest, buf.Bytes(), 0666); err != nil {
-				writeError(w, err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			log.Printf("Writed WEBP at %s", dest)
@@ -101,7 +90,7 @@ func main() {
 			var location = fmt.Sprintf("http://%s%s", r.Host, filename)
 			log.Printf("Accessible by %s", location)
 			w.Header().Add("location", location)
-			w.WriteHeader(201)
+			w.WriteHeader(http.StatusCreated)
 			fmt.Fprintf(w, "%s", img64)
 			return
 		}
