@@ -16,6 +16,15 @@ import (
 	"github.com/denisbrodbeck/sqip"
 )
 
+func someErr(errors ...error) error {
+	for _, err := range errors {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func saveFile(file multipart.File, dest string) error {
 	file.Seek(0, io.SeekStart)
 	dst, err := os.Create(path.Join(storage, dest))
