@@ -22,6 +22,11 @@ func main() {
 		}
 		if r.Method == "POST" {
 
+			if err := locationAvailable(r); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+
 			if err := r.ParseMultipartForm(MAX_UPLOAD_SIZE); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
