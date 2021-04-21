@@ -11,7 +11,6 @@ import (
 	"os"
 	"path"
 	"runtime"
-	"time"
 
 	"github.com/chai2010/webp"
 	"github.com/denisbrodbeck/sqip"
@@ -98,8 +97,6 @@ func main() {
 				return
 			}
 			log.Printf("Writed WEBP at %s", dest)
-
-			time.Sleep(1400 * time.Millisecond)
 
 			var location = fmt.Sprintf("http://%s%s", r.Host, filename)
 			log.Printf("Accessible by %s", location)
