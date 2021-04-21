@@ -70,3 +70,11 @@ func convertAndSaveWEBP(img image.Image, r *http.Request) error {
 func location(r *http.Request, ext string) string {
 	return fmt.Sprintf("http://%s%s.%s", r.Host, r.URL.Path, ext)
 }
+
+func locationAvailable(r *http.Request) error {
+	file := path.Join(storage, fmt.Sprintf("%s.webp", r.URL.Path))
+	if _, err := os.Stat(file); err == nil {
+		return os.ErrExist
+	}
+	return nil
+}
