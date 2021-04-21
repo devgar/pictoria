@@ -8,35 +8,13 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 	"path"
-	"syscall"
+	"runtime"
+	"time"
 
 	"github.com/chai2010/webp"
-	_ "github.com/joho/godotenv/autoload"
+	"github.com/denisbrodbeck/sqip"
 )
-
-var storage string
-
-func initStorage() {
-	storage = os.Getenv("STORAGE")
-	if storage == "" {
-		if homedir, err := os.UserHomeDir(); err == nil {
-			storage = path.Join(homedir, ".pictoria")
-		} else {
-			log.Panic("Can't choose storage", err)
-		}
-	}
-	if err := os.MkdirAll(storage, os.ModeSetuid); err != nil {
-		log.Panic("Error creating storage", err)
-	}
-
-	if err := syscall.Access(storage, syscall.O_RDWR); err != nil {
-		log.Panic("Can't create on desired storage ", err)
-	}
-
-	log.Println("Storage in", storage)
-}
 
 func serveFile(w http.ResponseWriter, r *http.Request) {
 	var route = path.Join(storage, r.URL.Path[1:])
@@ -44,8 +22,13 @@ func serveFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, route)
 }
 
-func init() {
-	initStorage()
+func writeError(w http.ResponseWriter, err error, code ...int) {
+	var c = 500
+	if len(code) > 0 {
+		c = code[0]
+	}
+	w.WriteHeader(c)
+	fmt.Fprintf(w, err.Error())
 }
 
 func main() {
@@ -54,43 +37,59 @@ func main() {
 		log.Println(r.Method, r.URL.Path)
 		if r.Method == "GET" {
 			serveFile(w, r)
-		} else {
+			return
+		}
+		if r.Method == "POST" {
 			r.ParseMultipartForm(10 << 20) // Set max size to 10MB
-			if file, _, err := r.FormFile("file"); err != nil {
-				fmt.Println("Error Retrieving the file")
-				fmt.Println(err)
-				w.WriteHeader(500)
-				fmt.Fprintf(w, "Error Retrieving the file\n")
+			file, _, err := r.FormFile("file")
+			if err != nil {
+				writeError(w, err)
 				return
-			} else {
-				defer file.Close()
-				// fmt.Printf("Uploaded File: %+v\n", header.Filename)
-				// fmt.Printf("File Size:     %+v\n", header.Size)
-				// fmt.Printf("MIME Header:   %+v\n", header.Header["Content-Type"])
-				// fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
-
-				img, text, err := image.Decode(file)
-				if err != nil {
-					log.Println(err)
-				}
-				log.Printf("Got string format %s", text)
-
-				var buf bytes.Buffer
-				var ops = &webp.Options{Lossless: false, Quality: 80}
-
-				if err := webp.Encode(&buf, img, ops); err != nil {
-					log.Println(err)
-				}
-
-				var dest = path.Join(storage, "out.webp")
-				if err := ioutil.WriteFile(dest, buf.Bytes(), 0666); err != nil {
-					log.Println(err)
-				}
-				var location = fmt.Sprintf("http://%s/%s", r.Host, dest)
-				w.Header().Add("location", location)
-				w.WriteHeader(201)
-				fmt.Fprintf(w, "Successfully Uploaded File\n")
 			}
+			defer file.Close()
+
+			img, text, err := image.Decode(file)
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			log.Printf("Got string format %s", text)
+
+			svg, width, height, err := sqip.RunLoaded(img, 256, 16, 1, 128, 0, runtime.NumCPU(), "")
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+
+			log.Printf("Got SVG of size %dx%d", width, height)
+
+			var img64 = "data:image/svg+xml;base64," + sqip.Base64(svg)
+
+			log.Printf("Got SVG Image in BASE64")
+
+			var buf bytes.Buffer
+			var ops = &webp.Options{Lossless: false, Quality: 80}
+
+			if err := webp.Encode(&buf, img, ops); err != nil {
+				writeError(w, err)
+				return
+			}
+
+			log.Printf("Encoded WEBP")
+
+			var dest = path.Join(storage, "out.webp")
+			if err := ioutil.WriteFile(dest, buf.Bytes(), 0666); err != nil {
+				writeError(w, err)
+			}
+			log.Printf("Writed WEBP at %s", dest)
+
+			time.Sleep(1400 * time.Millisecond)
+
+			var location = fmt.Sprintf("http://%s/%s", r.Host, dest)
+			w.Header().Add("location", location)
+			w.WriteHeader(201)
+			fmt.Fprintf(w, "Successfully Uploaded File\n\n%s\n", img64)
+			return
 		}
 	})
 
