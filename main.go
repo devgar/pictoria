@@ -40,8 +40,12 @@ func main() {
 			return
 		}
 		if r.Method == "POST" {
+			f := r.URL.Query().Get("f")
+			if f == "" {
+				f = "file"
+			}
 			r.ParseMultipartForm(10 << 20) // Set max size to 10MB
-			file, _, err := r.FormFile("file")
+			file, _, err := r.FormFile(f)
 			if err != nil {
 				writeError(w, err)
 				return
