@@ -8,9 +8,6 @@ import (
 	_ "image/png"
 	"log"
 	"net/http"
-	"sync"
-
-	"github.com/denisbrodbeck/sqip"
 )
 
 var MAX_UPLOAD_SIZE int64 = 10 << 20 // Set max size to 10MB
@@ -58,29 +55,22 @@ func main() {
 			}
 
 			// Start async
-			var wg sync.WaitGroup
-			var saveFileErr, parseB64Err, saveWebpErr error
-			var img64 sqip.StringBase64
 
-			wg.Add(1)
-			go func() {
-				saveFileErr = saveFile(file, fmt.Sprintf("%s.%s", r.URL.Path, ext))
-				wg.Done()
-			}()
-			wg.Add(1)
-			go func() {
-				img64, parseB64Err = parseB64SVG(img)
-				wg.Done()
-			}()
-			wg.Add(1)
-			go func() {
-				saveWebpErr = convertAndSaveWEBP(img, r)
-				wg.Done()
-			}()
+			errCh := make(chan error, 3)
+			imgCh := make(chan string, 1)
+			defer close(errCh)
+			defer close(imgCh)
 
-			wg.Wait()
-
-			if err := someErr(saveFileErr, parseB64Err, saveWebpErr); err != nil {
+			enpipe(errCh, func() error {
+				return saveFile(file, fmt.Sprintf("%s.%s", r.URL.Path, ext))
+			})
+			repipe(imgCh, errCh, func() (string, error) {
+				return parseB64SVG(img)
+			})
+			enpipe(errCh, func() error {
+				return convertAndSaveWEBP(img, r)
+			})
+			if err := someErr(errCh); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -91,7 +81,7 @@ func main() {
 				w.Header().Add(fmt.Sprintf("location-%s", ext), location(r, ext))
 			}
 			w.WriteHeader(http.StatusCreated)
-			fmt.Fprint(w, img64)
+			fmt.Fprint(w, <-imgCh)
 			return
 		}
 	})

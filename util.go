@@ -16,9 +16,9 @@ import (
 	"github.com/denisbrodbeck/sqip"
 )
 
-func someErr(errors ...error) error {
-	for _, err := range errors {
-		if err != nil {
+func someErr(errors chan error) error {
+	for i := 0; i < len(errors); i++ {
+		if err := <-errors; err != nil {
 			return err
 		}
 	}
@@ -37,9 +37,9 @@ func saveFile(file multipart.File, dest string) error {
 	return err
 }
 
-func parseB64SVG(img image.Image) (sqip.StringBase64, error) {
+func parseB64SVG(img image.Image) (string, error) {
 	svg, _, _, err := sqip.RunLoaded(img, 256, 16, 1, 128, 0, runtime.NumCPU(), "")
-	return "data:image/svg+xml;base64," + sqip.Base64(svg), err
+	return string("data:image/svg+xml;base64," + sqip.Base64(svg)), err
 }
 
 func serveFile(w http.ResponseWriter, r *http.Request) {
@@ -77,4 +77,18 @@ func locationAvailable(r *http.Request) error {
 		return os.ErrExist
 	}
 	return nil
+}
+
+func enpipe(c chan error, f func() error) {
+	go func() {
+		c <- f()
+	}()
+}
+
+func repipe(aChan chan string, eChan chan error, f func() (string, error)) {
+	go func() {
+		a, err := f()
+		aChan <- a
+		eChan <- err
+	}()
 }
